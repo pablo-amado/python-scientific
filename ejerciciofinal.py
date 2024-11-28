@@ -57,7 +57,7 @@ from io import StringIO
 #
 # Tienen que entregar un PDF, tipo Markdown con código, gráficos y cualquier insight obtenido del dataset.
 
-signals = pd.read_csv('data/blinking.dat', delimiter=' ', names = ['timestamp','counter','eeg','attention','meditation','blinking'])
+signals = pd.read_csv('data/datafinal/bethoven.dat', delimiter=' ', names = ['timestamp','counter','eeg','attention','meditation','blinking'])
 
 print('Estructura de la informacion:')
 print(signals.head())
@@ -73,4 +73,23 @@ plt.ylabel('eeg(t)');
 plt.title(r'EEG Signal')     # r'' representa un raw string que no tiene caracteres especiales
 plt.ylim([-2000, 2000]);
 plt.xlim([0,len(eeg)])
+plt.show()
+
+
+signals1 = pd.read_csv('data/datafinal/deathmetal.dat', delimiter=' ', names = ['timestamp','counter','eeg','attention','meditation','blinking'])
+
+print('Estructura de la informacion:')
+print(signals1.head())
+
+data1 = signals1.values
+eeg1 = data1[:,2]
+
+print(eeg1)
+
+plt.plot(eeg1,'r', label='EEG')
+plt.xlabel('t');
+plt.ylabel('eeg(t)');
+plt.title(r'EEG Signal')     # r'' representa un raw string que no tiene caracteres especiales
+plt.ylim([-2000, 2000]);
+plt.xlim([0,len(eeg1)])
 plt.show()
