@@ -50,6 +50,11 @@ from scipy.fftpack import fft
 from scipy.signal import firwin, remez, kaiser_atten, kaiser_beta
 from scipy.signal import butter, filtfilt, buttord
 from scipy.signal import butter, lfilter
+from scipy.stats import entropy
+from sklearn.model_selection import train_test_split
+from sklearn.svm import SVC
+from sklearn.metrics import confusion_matrix, accuracy_score, classification_report
+import seaborn as sns
 
 # El protocolo experimental que implementamos tiene 2 datasets:
 # 1- Dataset de las señales de EEG
@@ -93,31 +98,29 @@ eeg_baseline = data_baseline[:,2]
 
 print(eeg_baseline)
 
-#Graficar las señales originales
+# Create the grid of figures (3 rows, 1 column)
+fig, axes = plt.subplots(3, 1, figsize=(15, 20))  # Set desired figure size
 
-plt.plot(eeg_baseline,'r', label='EEG')
-plt.xlabel('t');
-plt.ylabel('eeg(t)');
-plt.title(r'EEG Signal Baseline')     # r'' representa un raw string que no tiene caracteres especiales
-plt.ylim([-2000, 2000]);
-plt.xlim([0,len(eeg_death)])
+# Function to format and plot each subplot
+def format_and_plot(data,color, label, ax, limits,xlabel):
+    ax.plot(data,color, label=label)
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel('A')
+    ax.set_title(f'{label}')  # Include subplot number in title
+    ax.set_ylim([-limits, limits])
+    ax.set_xlim([0, len(data)])
+    ax.grid()
+    ax.legend()
+
+# Plot each subplot using the function
+format_and_plot(eeg_baseline,'r', 'Baseline', axes[0],800,'t')
+format_and_plot(eeg_beth,'b', 'Bethoven', axes[1],800,'t')
+format_and_plot(eeg_death,'g', 'Deathmetal', axes[2],800,'t')
+
+# Adjust layout to prevent overlapping titles
+plt.subplots_adjust(hspace=0.5)
 plt.show()
 
-plt.plot(eeg_beth,'r', label='EEG')
-plt.xlabel('t');
-plt.ylabel('eeg(t)');
-plt.title(r'EEG Signal Bethoven')     # r'' representa un raw string que no tiene caracteres especiales
-plt.ylim([-2000, 2000]);
-plt.xlim([0,len(eeg_death)])
-plt.show()
-
-plt.plot(eeg_death,'r', label='EEG')
-plt.xlabel('t');
-plt.ylabel('eeg(t)');
-plt.title(r'EEG Signal Deathmetal')     # r'' representa un raw string que no tiene caracteres especiales
-plt.ylim([-2000, 2000]);
-plt.xlim([0,len(eeg_death)])
-plt.show()
 
 #-----FILTROS TEMPORALES-----
 
@@ -135,7 +138,7 @@ axes[0].plot(avgeeg_baseline, 'r', label='Smoothed EEG')
 axes[0].set_xlabel('t')
 axes[0].set_ylabel('eeg(t)')
 axes[0].set_title(r'Smoothed EEG Baseline')
-axes[0].set_ylim([-2000, 2000])
+axes[0].set_ylim([-800, 800])
 axes[0].set_xlim([0, len(avgeeg_baseline)])
 axes[0].legend()
 
@@ -144,16 +147,16 @@ axes[1].plot(avgeeg_beth, 'b', label='Smoothed EEG')
 axes[1].set_xlabel('t')
 axes[1].set_ylabel('eeg(t)')
 axes[1].set_title(r'Smoothed EEG Bethoven')
-axes[1].set_ylim([-2000, 2000])
+axes[1].set_ylim([-800, 800])
 axes[1].set_xlim([0, len(avgeeg_beth)])
 axes[1].legend()
 
 # Tercer gráfico: Señal suavizada deathmetal
-axes[2].plot(avgeeg_death, 'b', label='Smoothed EEG')
+axes[2].plot(avgeeg_death, 'g', label='Smoothed EEG')
 axes[2].set_xlabel('t')
 axes[2].set_ylabel('eeg(t)')
 axes[2].set_title(r'Smoothed EEG Deathmetal')
-axes[2].set_ylim([-2000, 2000])
+axes[2].set_ylim([-800, 800])
 axes[2].set_xlim([0, len(avgeeg_death)])
 axes[2].legend()
 
@@ -183,14 +186,14 @@ plt.grid()
 plt.show()
 
 # Filtro pasa-banda
-def butter_bandpass(lowcut, highcut, fs, order=5):
+def butter_bandpass(lowcut, highcut, fs, order=6):
     nyq = 0.5 * fs
     low = lowcut / nyq
     high = highcut / nyq
     b, a = butter(order, [low, high], btype="band")
     return b, a
 
-def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
+def butter_bandpass_filter(data, lowcut, highcut, fs, order=6):
     b, a = butter_bandpass(lowcut, highcut, fs, order=order)
     y = lfilter(b, a, data)
     return y
@@ -199,28 +202,10 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 lowcut = 1.0  # Frecuencia de corte baja (Hz)
 highcut = 50.0  # Frecuencia de corte alta (Hz)
 
-filtered_signal = butter_bandpass_filter(eeg_baseline, lowcut, highcut, Fs, order=5)
+filtered_signal = butter_bandpass_filter(eeg_baseline, lowcut, highcut, Fs, order=6)
 
 # FFT de la señal filtrada
 yf_filtered = fft(filtered_signal)
-
-plt.figure(figsize=(10, 6))
-plt.plot(xf, 2.0 / N * np.abs(yf_filtered[:N // 2]))
-plt.title("Espectro de la señal filtrada (Baseline)")
-plt.xlabel("Frecuencia (Hz)")
-plt.ylabel("Amplitud")
-plt.grid()
-plt.show()
-
-# Visualizar la señal filtrada en el tiempo
-plt.figure(figsize=(10, 6))
-plt.plot(filtered_signal, 'b', label='Señal Filtrada')
-plt.title("Señal filtrada (Baseline)")
-plt.xlabel("Tiempo (muestras)")
-plt.ylabel("Amplitud")
-plt.grid()
-plt.show()
-
 
 #Bethoven
 
@@ -253,28 +238,10 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 lowcut = 1.0  # Frecuencia de corte baja (Hz)
 highcut = 50.0  # Frecuencia de corte alta (Hz)
 
-filtered_signal1 = butter_bandpass_filter(eeg_beth, lowcut, highcut, Fs, order=5)
+filtered_signal1 = butter_bandpass_filter(eeg_beth, lowcut, highcut, Fs, order=6)
 
 # FFT de la señal filtrada
 yf_filtered1 = fft(filtered_signal1)
-
-plt.figure(figsize=(10, 6))
-plt.plot(xf, 2.0 / N * np.abs(yf_filtered1[:N // 2]))
-plt.title("Espectro de la señal filtrada (Bethoven)")
-plt.xlabel("Frecuencia (Hz)")
-plt.ylabel("Amplitud")
-plt.grid()
-plt.show()
-
-# Visualizar la señal filtrada en el tiempo
-plt.figure(figsize=(10, 6))
-plt.plot(filtered_signal1, 'b', label='Señal Filtrada')
-plt.title("Señal filtrada (Bethoven)")
-plt.xlabel("Tiempo (muestras)")
-plt.ylabel("Amplitud")
-plt.grid()
-plt.show()
-
 
 #Deathmetal
 
@@ -307,58 +274,138 @@ def butter_bandpass_filter(data, lowcut, highcut, fs, order=5):
 lowcut = 1.0  # Frecuencia de corte baja (Hz)
 highcut = 50.0  # Frecuencia de corte alta (Hz)
 
-filtered_signal2 = butter_bandpass_filter(eeg_death, lowcut, highcut, Fs, order=5)
+filtered_signal2 = butter_bandpass_filter(eeg_death, lowcut, highcut, Fs, order=6)
 
 # FFT de la señal filtrada
 yf_filtered2 = fft(filtered_signal2)
 
-plt.figure(figsize=(10, 6))
-plt.plot(xf, 2.0 / N * np.abs(yf_filtered2[:N // 2]))
-plt.title("Espectro de la señal filtrada (Deathmetal)")
-plt.xlabel("Frecuencia (Hz)")
-plt.ylabel("Amplitud")
-plt.grid()
+# Crear la grilla de gráficos (3 filas, 1 columna)
+fig, axes = plt.subplots(3, 1, figsize=(15, 20))
+
+# Plot each subplot using the function
+format_and_plot(filtered_signal,'r', 'Baseline filtrado', axes[0],800,'t')
+format_and_plot(filtered_signal1,'b', 'Bethoven filtrado', axes[1],800,'t')
+format_and_plot(filtered_signal2,'g', 'Deathmetal filtrado', axes[2],800,'t')
+
+# Adjust layout to prevent overlapping titles
+plt.subplots_adjust(hspace=0.5)
 plt.show()
 
-# Visualizar la señal filtrada en el tiempo
-plt.figure(figsize=(10, 6))
-plt.plot(filtered_signal2, 'b', label='Señal Filtrada')
-plt.title("Señal filtrada (Deathmetal)")
-plt.xlabel("Tiempo (muestras)")
-plt.ylabel("Amplitud")
-plt.grid()
-plt.show()
-
-
-#Los tres graficos para comparar
 
 # Crear la grilla de gráficos (3 filas, 1 columna)
-fig, axes = plt.subplots(3, 1, figsize=(10, 12))
+fig, axes = plt.subplots(3, 1, figsize=(10, 15))
 
 # Primer gráfico: Espectro de la señal filtrada (Baseline)
 axes[0].plot(xf, 2.0 / N * np.abs(yf_filtered[:N // 2]), 'r', label='Baseline')
-axes[0].set_xlabel('Frecuencia (Hz)')
+axes[0].set_xlabel('Hz')
 axes[0].set_ylabel('Amplitud')
-axes[0].set_title('Espectro de la señal filtrada (Baseline)')
+axes[0].set_ylim([0, 10])
+axes[0].set_xlim([0, 60])
+axes[0].set_title('Espectro señal filtrada (Baseline)')
 axes[0].grid()
 axes[0].legend()
 
 # Segundo gráfico: Espectro de la señal filtrada (Bethoven)
 axes[1].plot(xf, 2.0 / N * np.abs(yf_filtered1[:N // 2]), 'b', label='Bethoven')
-axes[1].set_xlabel('Frecuencia (Hz)')
+axes[1].set_xlabel('Hz')
 axes[1].set_ylabel('Amplitud')
-axes[1].set_title('Espectro de la señal filtrada (Bethoven)')
+axes[1].set_ylim([0, 10])
+axes[1].set_xlim([0, 60])
+axes[1].set_title('Espectro señal filtrada (Bethoven)')
 axes[1].grid()
 axes[1].legend()
 
 # Tercer gráfico: Espectro de la señal filtrada (Deathmetal)
 axes[2].plot(xf, 2.0 / N * np.abs(yf_filtered2[:N // 2]), 'g', label='Deathmetal')
-axes[2].set_xlabel('Frecuencia (Hz)')
+axes[2].set_xlabel('Hz')
 axes[2].set_ylabel('Amplitud')
-axes[2].set_title('Espectro de la señal filtrada (Deathmetal)')
+axes[2].set_ylim([0, 10])
+axes[2].set_xlim([0, 60])
+axes[2].set_title('Espectro señal filtrada (Deathmetal)')
 axes[2].grid()
 axes[2].legend()
 
 # Ajustar el espacio entre gráficos
-plt.tight_layout()
+plt.subplots_adjust(hspace=0.5)
 plt.show()
+
+# Feature extraction
+
+
+
+def rolling_statistics(data, window_size, label):
+    data_series = pd.Series(data)
+    rolling_stats = data_series.rolling(window=window_size)
+
+    stats = pd.DataFrame({
+        "media": rolling_stats.mean(),
+        "desviacion_estandar": rolling_stats.std(),
+        "maximo": rolling_stats.max(),
+        "minimo": rolling_stats.min(),
+        "RMS": rolling_stats.apply(lambda x: np.sqrt(np.mean(x**2)), raw=False),
+        "señal": label
+    })
+
+    return stats
+
+features_bethoven = rolling_statistics(filtered_signal1,256,0)
+features_bethoven.dropna(inplace=True)
+
+features_deathmetal = rolling_statistics(filtered_signal2,256,1)
+features_deathmetal.dropna(inplace=True)
+
+dataset = pd.concat([features_bethoven,features_deathmetal],axis=0)
+
+
+# Armado del clasificador
+
+# Paso 1: Preparar los datos
+X = dataset.drop(columns=['señal'])  # Variables independientes (todas menos 'señal')
+y = dataset['señal']  # Variable dependiente (columna 'señal')
+
+# Paso 2: Dividir en entrenamiento y prueba (80% entrenamiento, 20% prueba)
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+
+# Paso 3: Entrenar el modelo SVM
+model = SVC(kernel='linear')  # Puedes probar otros kernels como 'rbf' o 'poly'
+model.fit(X_train, y_train)
+
+# Paso 4: Predecir en el conjunto de prueba
+y_pred = model.predict(X_test)
+
+# Paso 5: Evaluar el modelo
+
+# Matriz de confusión
+cm = confusion_matrix(y_test, y_pred)
+print("Matriz de Confusión:")
+print(cm)
+
+# Mostrar la matriz de confusión con un mapa de calor
+sns.heatmap(cm, annot=True, fmt='d', cmap='Blues', xticklabels=model.classes_, yticklabels=model.classes_)
+plt.title('Matriz de Confusión')
+plt.xlabel('Predicción')
+plt.ylabel('Valor Real')
+plt.show()
+
+# Calcular el accuracy (exactitud)
+accuracy = accuracy_score(y_test, y_pred)
+print(f"Accuracy: {accuracy:.4f}")
+
+# Reporte con la sensibilidad, especificidad, y otros parámetros
+print("Reporte de Clasificación:")
+print(classification_report(y_test, y_pred))
+
+# Extra: Sensibilidad y Especificidad
+# Sensibilidad (recall): tp / (tp + fn)
+# Especificidad: tn / (tn + fp)
+tn, fp, fn, tp = cm.ravel()
+sensibilidad = tp / (tp + fn)
+especificidad = tn / (tn + fp)
+
+print(f"Sensibilidad: {sensibilidad:.4f}")
+print(f"Especificidad: {especificidad:.4f}")
+
+
+
+
+
